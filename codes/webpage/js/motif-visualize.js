@@ -3,6 +3,7 @@ var neo4j_cy;
 var driver;
 var layout;
 var node_ids = [];
+var input_motifs = [];
 
 
 function initCytoscape() {
@@ -149,32 +150,36 @@ function motif_input_btn_click() {
         panningEnabled: true,
         userZoomingEnabled: false,
 
-        style: [
-            {
-                selector: 'node',
-                style: {
-                    'content': 'data(name)'
-                }
-            },
-
-            {
-                selector: 'edge',
-                style: {
-                    'target-arrow-shape': 'triangle'
-                }
-            },
-
-            {
-                selector: ':selected',
-                style: {}
-            }
-        ],
+        style: cytoscape.stylesheet()
+            .selector('node')
+            .css({
+                'content': 'data(name)',
+                'height': 30,
+                'width': 30,
+                'background-color': '#543190',
+                'border-color': '#000',
+                'border-width': 4,
+                'border-opacity': 1
+            })
+            .selector('node:selected')
+            .css({
+                'border-color': '#e700ff',
+            })
+            .selector('edge')
+            .css({
+                'curve-style': 'bezier',
+                'width': 3,
+                'target-arrow-shape': 'triangle',
+                'line-color': '#000',
+                'target-arrow-color': '#000'
+            }),
         layout: {
-            name: 'breadthfirst'
+            name: 'breadthfirst',
+            directed: true
         },
     });
 
-    motif_input_cy.remove(motif_input_cy.elements("node"));
+    //motif_input_cy.remove(motif_input_cy.elements("node"));
     var selectAllOfTheSameType = function (ele) {
         motif_input_cy.elements().unselect();
         if (ele.isNode()) {
@@ -192,7 +197,7 @@ function motif_input_btn_click() {
                 image: {src: "img/remove.svg", width: 12, height: 12, x: 6, y: 4},
                 selector: 'node, edge',
                 onClickFunction: function (event) {
-                    var target = event.target || event.cyTarget;
+                    var target = event.target;
                     target.remove();
                 },
                 hasTrailingDivider: true
@@ -203,7 +208,7 @@ function motif_input_btn_click() {
                 tooltipText: 'hide',
                 selector: '*',
                 onClickFunction: function (event) {
-                    var target = event.target || event.cyTarget;
+                    var target = event.target;
                     target.hide();
                 },
                 disabled: false
@@ -215,7 +220,7 @@ function motif_input_btn_click() {
                 image: {src: "img/remove.svg", width: 12, height: 12, x: 6, y: 6},
                 coreAsWell: true,
                 onClickFunction: function (event) {
-                    cy.$(':selected').remove();
+                    motif_input_cy.$(':selected').remove();
                 }
             },
             {
@@ -224,7 +229,7 @@ function motif_input_btn_click() {
                 tooltipText: 'select all nodes',
                 selector: 'node',
                 onClickFunction: function (event) {
-                    selectAllOfTheSameType(event.target || event.cyTarget);
+                    selectAllOfTheSameType(event.target);
                 }
             },
             {
@@ -244,13 +249,13 @@ function motif_input_btn_click() {
 
                 selector: 'node:selected',
                 onClickFunction: function (event) {
-                    var target = cy.$('node:selected');
+                    var target = motif_input_cy.$('node:selected');
                     if (target.length != 2)
                         alert("Need to select 2 nodes");
                     else {
                         var s = target[0]['_private']['data']['id'];
                         var t = target[1]['_private']['data']['id'];
-                        cy.add([{
+                        motif_input_cy.add([{
                             group: "edges",
                             data: {
                                 source: s,
@@ -265,9 +270,10 @@ function motif_input_btn_click() {
         ]
     };
 
-    var context_menu_instance = cy.contextMenus(context_options);
+    var context_menu_instance = motif_input_cy.contextMenus(context_options);
     var type_reader_session = driver.session();
     var i = 0;
+    node_types = [];
     type_reader_session.run("MATCH (n) RETURN DISTINCT LABELS(n)").subscribe({
         onNext: record => {
             i += 1;
@@ -280,17 +286,35 @@ function motif_input_btn_click() {
                     onClickFunction: function (event) {
                         var data = {
                             group: 'nodes',
-                            name: record.get(0)[0],
+                            name: record.get(0)[0]
                         };
 
-                        var pos = event.position || event.cyPosition;
+                        var pos = event.position;
+
+                        function getRandomColor() {
+                            var letters = '0123456789ABCDEF';
+                            var color = '#';
+                            for (var i = 0; i < 6; i++) {
+                                color += letters[Math.floor(Math.random() * 16)];
+                            }
+                            return color;
+                        }
+
+                        if (!node_types.includes(record.get(0)[0])) {
+                            console.log("new color for class:  " + record.get(0)[0]);
+                            motif_input_cy.style().selector('.' + record.get(0)[0]).css({'background-color': getRandomColor()}).update();
+                            // motif_input_cy.style().selector('Virus' ).css({'background-color': getRandomColor()});
+
+                            node_types.push(record.get(0)[0]);
+                        }
 
                         motif_input_cy.add({
                             data: data,
                             position: {
                                 x: pos.x,
                                 y: pos.y
-                            }
+                            },
+                            classes: record.get(0)[0],
                         });
                     }
 
@@ -312,6 +336,7 @@ function modal_close() {
 
 function clean_up_motif() {
     motif_input_cy.remove(motif_input_cy.elements("node"));
+    motif_input_cy.remove(motif_input_cy.elements("edge"));
 }
 
 function submit_button() {
